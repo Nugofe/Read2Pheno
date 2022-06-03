@@ -115,7 +115,7 @@ def sequence_attention_model(opt):
     ## ATT Layers
     r_emb = attention_layer(H_lstm, opt.att_n_layer, opt.att_n_node, block_name = 'att')
     
-    ## additional fully connected
+    ## fully connected layers (en nuestro caso solo 1)
     r_emb = fully_connected(r_emb, opt.fc_n_layer, opt.fc_n_node, opt.drop_out_rate, block_name = 'fc')
     
     if opt.Ty == 2: # Ty = number of target classes (CD, Not-CD) (EL NUESTRO)
@@ -124,6 +124,10 @@ def sequence_attention_model(opt):
         # Compile model
         model.compile(optimizer=Adam(lr = opt.opt_lr, beta_1=0.9, beta_2=0.999, decay=opt.opt_decay),
                         metrics=['accuracy'],
+                        #metrics=['precision_macro', 'precision_micro', 
+                        #         'recall_macro', 'recall_micro', 
+                        #         'f1_macro', 'f1_micro', 
+                        #         'accuracy', 'roc_auc'],
                         loss='binary_crossentropy')
     else:
         out = Dense(opt.Ty, activation='softmax', name='final_dense')(r_emb)
@@ -131,5 +135,9 @@ def sequence_attention_model(opt):
         # Compile model
         model.compile(optimizer=Adam(lr = opt.opt_lr, beta_1=0.9, beta_2=0.999, decay=opt.opt_decay),
                         metrics=['accuracy'],
+                        #metrics=['precision_macro', 'precision_micro', 
+                        #         'recall_macro', 'recall_micro', 
+                        #         'f1_macro', 'f1_micro', 
+                        #         'accuracy', 'roc_auc'],
                         loss='categorical_crossentropy')
     return model

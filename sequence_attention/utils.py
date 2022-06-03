@@ -34,6 +34,7 @@ def fna_to_dict(sample_id, label, in_dir, out_dir):
     pickle.dump(read_dict, open(out_name, 'wb'))
     return meta_data_read_list
 
+# ESTE NO
 def split_sample(sample_id, label, in_dir, out_dir):
     '''
     split reads in a sample into seperate files
@@ -66,6 +67,7 @@ def split_sample(sample_id, label, in_dir, out_dir):
     f_sample.close()
     return meta_data_read_list
 
+# ESTE YA NO (era para hacer la separación en conjuntos de train y test, pero nosotros haremos CV)
 def train_test_split(meta_data, train_size_per_class):
     '''
     train test split
@@ -86,6 +88,7 @@ def train_test_split(meta_data, train_size_per_class):
     
     return partition
 
+# ESTE NO
 def preprocess_data(opt):
     '''
     preprocessing the data
@@ -94,7 +97,7 @@ def preprocess_data(opt):
     if not os.path.exists(opt.out_dir):
         os.makedirs(opt.out_dir)
     
-    meta_data = pd.read_csv('{}/meta_data.csv'.format(opt.in_dir), dtype='str')
+    meta_data = pd.read_csv(opt.meta_data_file, dtype='str')
     
     label_list = sorted(meta_data['label'].unique())
     
@@ -152,39 +155,45 @@ def preprocess_data_pickle(opt):
     if not os.path.exists(opt.out_dir):
         os.makedirs(opt.out_dir)
     
-    # lee meta_data.csv (la clasificación real por muestra) y las ordena alfabéticamente
-    meta_data = pd.read_csv('{}/meta_data.csv'.format(opt.in_dir), dtype='str')
-    
+    # lee meta_data.csv (las clasificaciones reales por muestra) y las ordena alfabéticamente en función de la label (CD, Not-CD)
+    meta_data = pd.read_csv(opt.meta_data_file, dtype='str')
     label_list = sorted(meta_data['label'].unique())
     
-    # crea un diccionario con la info del meta_data.csv:  (posición o índice, clasificación de la muestra)
+    # crea un diccionario con la info del meta_data.csv y lo guarda en un .picke: (índice/posición/nombre fichero muestra, label)
     label_dict = {}
     for idx, label in enumerate(label_list):
         label_dict[label] = idx
-    
-    # guarda el diccionario en un pickle
+
     pickle.dump(label_dict, open('{}/label_dict.pkl'.format(opt.out_dir), 'wb'))
     
-    # dentro del output_dir, crea un directorio para cada entrada del diccionario; es decir, 1 directorio por muestra
+    # crea un directorio para cada label (CD, Not-CD) en el output_dir
+    # en él se guardará un .pickle por cada muestra (.fna) clasificada como esa label
     for label in label_list:
         label_dir = '{}/{}'.format(opt.out_dir, label)
         if os.path.exists(label_dir):
             continue
         os.makedirs(label_dir)
     
-    # ??????????????????????????????????????????????
     read_meta_data = {}
-    # tamaño csv > 10 ? STEP = tamaño del csv / 10 (y se queda con la parte entera de la división) : STEP = 1
-    STEP = meta_data.shape[0] // 10 if meta_data.shape[0] > 10 else 1
+    STEP = meta_data.shape[0] // 10 if meta_data.shape[0] > 10 else 1  # tamaño csv > 10 ? STEP = tamaño del csv / 10 (y se queda con la parte entera de la división) : STEP = 1
     for idx in range(meta_data.shape[0]):
         if idx % STEP == 0: # módulo
             logging.info('Processing raw data: {:.1f}% completed.'.format(10 * idx / STEP))
-        sample_id, label = meta_data.iloc[idx]['sample_id'], meta_data.iloc[idx]['label']
 
-        # meter cada muestra (almacenadas en los .fna) en un diccionario
+        sample_id, label = meta_data.iloc[idx]['sample_id'], meta_data.iloc[idx]['label']
         read_meta_data[sample_id] = fna_to_dict(sample_id, label, opt.in_dir, opt.out_dir)
     
-    # The number of samples is selected based on the least number of sample per class after filtering for each data set (en este caso solo tendremos un dataset- el de Chron)
+    # crear un .pickle con los datos de meta_data.csv y guardarlo en el out_dir
+    sample_to_label = {}
+    for idx in range(meta_data.shape[0]):
+        sample_id, label = meta_data.iloc[idx]['sample_id'], meta_data.iloc[idx]['label']
+        sample_to_label[sample_id] = label
+
+    pickle.dump([sample_to_label, read_meta_data], open('{}/meta_data.pkl'.format(opt.out_dir), 'wb'))
+
+    # ------------------------------------------------------------------------------------------------------------------------------
+
+    # The number of samples is selected based on the least number of sample per class after filtering for each data set (en este caso solo tendremos un dataset - el de Chron)
     # cuenta cuántas muestras hay de cada tipo (CD, Not-CD) y escoge el mínimo
     min_num_sample = min([meta_data[meta_data['label']==label].shape[0] for label in label_list])
     num_train_samples_per_cls = opt.num_train_samples_per_cls
@@ -192,17 +201,9 @@ def preprocess_data_pickle(opt):
     
     # crear un diccionario con el grupo de train y el de test
     partition = train_test_split(meta_data, num_train_samples_per_cls)
-    
-    
-    sample_to_label = {}
-    for idx in range(meta_data.shape[0]):
-        sample_id, label = meta_data.iloc[idx]['sample_id'], meta_data.iloc[idx]['label']
-        sample_to_label[sample_id] = label
 
-    # crear un pickle con los datos de meta_data.csv y guardarlo en el out_dir
-    pickle.dump([sample_to_label, read_meta_data], open('{}/meta_data.pkl'.format(opt.out_dir), 'wb'))
     
-    # crear pickles con los datos de train y test y guardarlos en el out_dir
+    # crear un .pickle con los datos de train y test y guardarlo en el out_dir
     train_list = []
     for sample_id in partition['train']:
         train_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
@@ -211,4 +212,4 @@ def preprocess_data_pickle(opt):
         test_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
     
     read_partition = {'train': train_list, 'test': test_list}
-    pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))   
+    pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))
