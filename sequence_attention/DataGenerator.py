@@ -108,7 +108,7 @@ class DataGeneratorPickle(keras.utils.Sequence):
         return int(np.floor(len(self.list_IDs) / self.batch_size))
 
     # get all data (ESTA LA HICE YO PARA PROBAR COSAS)
-    def __getdata__(self):
+    def getalldata(self):
         '''Generate all batches of data'''
 
         # Find list of IDs

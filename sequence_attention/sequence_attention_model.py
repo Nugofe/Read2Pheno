@@ -123,7 +123,7 @@ def sequence_attention_model(opt):
         model = Model(inputs = X, outputs = out)
         # Compile model
         model.compile(optimizer=Adam(lr = opt.opt_lr, beta_1=0.9, beta_2=0.999, decay=opt.opt_decay),
-                        metrics=['accuracy'],
+                        #metrics=['accuracy'],
                         #metrics=['precision_macro', 'precision_micro', 
                         #         'recall_macro', 'recall_micro', 
                         #         'f1_macro', 'f1_micro', 
@@ -134,7 +134,7 @@ def sequence_attention_model(opt):
         model = Model(inputs = X, outputs = out)
         # Compile model
         model.compile(optimizer=Adam(lr = opt.opt_lr, beta_1=0.9, beta_2=0.999, decay=opt.opt_decay),
-                        metrics=['accuracy'],
+                        #metrics=['accuracy'],
                         #metrics=['precision_macro', 'precision_micro', 
                         #         'recall_macro', 'recall_micro', 
                         #         'f1_macro', 'f1_micro', 

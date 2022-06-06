@@ -1,6 +1,7 @@
 import os
 import random
 import pandas as pd
+import numpy as np
 import pickle
 import logging
 
@@ -67,7 +68,6 @@ def split_sample(sample_id, label, in_dir, out_dir):
     f_sample.close()
     return meta_data_read_list
 
-# ESTE YA NO (era para hacer la separación en conjuntos de train y test, pero nosotros haremos CV)
 def train_test_split(meta_data, train_size_per_class):
     '''
     train test split
@@ -87,6 +87,21 @@ def train_test_split(meta_data, train_size_per_class):
     partition = {'train': train, 'test': test}
     
     return partition
+
+def select_data(meta_data, number_samples_per_class):
+    #ej: ['CD', 'Not-CD']
+    label_list = sorted(meta_data['label'].unique())
+
+    #ej: {'CD': ['ERR1368879', ...], 'Not-CD': ['ERR1368881', ...]}
+    sample_by_class = {label: meta_data[meta_data['label']==label]['sample_id'].tolist() for label in label_list}
+    
+    data = []
+    
+    for cls in sample_by_class: # cls = CD, Not-CD
+        tmp_list = random.sample(sample_by_class[cls], number_samples_per_class) # 'number_samples_per_class' muestras de cada clase
+        data.extend(tmp_list)
+    
+    return data
 
 # ESTE NO
 def preprocess_data(opt):
@@ -159,7 +174,7 @@ def preprocess_data_pickle(opt):
     meta_data = pd.read_csv(opt.meta_data_file, dtype='str')
     label_list = sorted(meta_data['label'].unique())
     
-    # crea un diccionario con la info del meta_data.csv y lo guarda en un .picke: (índice/posición/nombre fichero muestra, label)
+    # label_dict:   {'CD': 0, 'Not-CD': 1}
     label_dict = {}
     for idx, label in enumerate(label_list):
         label_dict[label] = idx
@@ -184,6 +199,7 @@ def preprocess_data_pickle(opt):
         read_meta_data[sample_id] = fna_to_dict(sample_id, label, opt.in_dir, opt.out_dir)
     
     # crear un .pickle con los datos de meta_data.csv y guardarlo en el out_dir
+    # read_meta_data:   {'ERR1368879': ['ERR1368879.1 1939.100001_0 length=175', 'ERR1368879.2 1939.100001_1 length=175', ...], ...}
     sample_to_label = {}
     for idx in range(meta_data.shape[0]):
         sample_id, label = meta_data.iloc[idx]['sample_id'], meta_data.iloc[idx]['label']
@@ -191,25 +207,56 @@ def preprocess_data_pickle(opt):
 
     pickle.dump([sample_to_label, read_meta_data], open('{}/meta_data.pkl'.format(opt.out_dir), 'wb'))
 
-    # ------------------------------------------------------------------------------------------------------------------------------
-
-    # The number of samples is selected based on the least number of sample per class after filtering for each data set (en este caso solo tendremos un dataset - el de Chron)
-    # cuenta cuántas muestras hay de cada tipo (CD, Not-CD) y escoge el mínimo
+    # escoger el número de muestras de cada
+    # escoger el número establecido en la configuración, o si este es muy pequeño, el número de muestras de la clase con menos muestras
     min_num_sample = min([meta_data[meta_data['label']==label].shape[0] for label in label_list])
     num_train_samples_per_cls = opt.num_train_samples_per_cls
     num_train_samples_per_cls = num_train_samples_per_cls if num_train_samples_per_cls < min_num_sample else min_num_sample
     
-    # crear un diccionario con el grupo de train y el de test
-    partition = train_test_split(meta_data, num_train_samples_per_cls)
+    # ------------------------------------------------------------------------------------------------------------------------------
 
+    # crear un diccionario con el grupo de train y el de test
+    #partition = train_test_split(meta_data, num_train_samples_per_cls)
+    #
+    ## crear un .pickle con los datos de train y test y guardarlo en el out_dir
+    #train_list = []
+    #for sample_id in partition['train']:
+    #    train_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
+    #test_list = []
+    #for sample_id in partition['test']:
+    #    test_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
+    #
+    #read_partition = {'train': train_list, 'test': test_list}
+    #pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))
+
+    # --------------------------------------------------------------------
+
+    data = select_data(meta_data, num_train_samples_per_cls)
     
-    # crear un .pickle con los datos de train y test y guardarlo en el out_dir
-    train_list = []
-    for sample_id in partition['train']:
-        train_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
-    test_list = []
-    for sample_id in partition['test']:
-        test_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
+    read_list = []          # todas las secuencias
+    read_list_selected = [] # solo las secuencias seleccionadas
+    for sample_id in data:
+        read_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
+
+    pickle.dump(read_list, open('{}/sequence_list.pkl'.format(opt.out_dir), 'wb'))
     
-    read_partition = {'train': train_list, 'test': test_list}
-    pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))
+    for sample in read_meta_data:
+        tmp_list = random.sample(read_meta_data[sample], opt.num_train_reads_per_sample)
+        filter_set = set(tmp_list)
+        read_list_selected.extend([tuple for tuple in read_list if tuple[1] in filter_set])
+    
+    pickle.dump(read_list_selected, open('{}/sequence_list_selected.pkl'.format(opt.out_dir), 'wb'))
+
+
+ ################ LAS MÍAS ################
+
+@staticmethod
+def save_text_array(file, elements): # file =  path + file_name
+    with open(file, mode='wt', encoding='utf-8') as myfile:
+        for e in elements:
+            myfile.write(e)
+            myfile.write('\n')
+
+@staticmethod
+def save_numpy_array(file, array):
+    np.savetxt(file, array, delimiter=",")
