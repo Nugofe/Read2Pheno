@@ -7,7 +7,7 @@ from .sequence_attention_model import sequence_attention_model
 from .utils import save_text_array
 from keras import backend as K
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score, confusion_matrix
 
 
 logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
@@ -29,7 +29,8 @@ class SeqAttModel:
         self.history = None
         logging.info('Model initialized.')
 
-    def tune_and_eval(self, X, y): # cross validation
+    # MI CROSS VALIDATION
+    def tune_and_eval(self, X, y, label_dict): # cross validation
         skf = StratifiedKFold(n_splits=self.opt.n_folds, shuffle=True) # CV con k = 10
 
         p_micro=[] # cada elemento es la métrica calculada en un fold
@@ -41,31 +42,36 @@ class SeqAttModel:
         accuracy=[]
         roc_auc=[]
 
+        actual_classes = np.empty([0], dtype=int)
+        predicted_classes = np.empty([0], dtype=int)
+
         for train_index, valid_index in skf.split(X, y): # Generate indices to split data into training and validation set
             print ('\n Evaluation on a new fold is now get started ..')
             X_train=X[train_index,:]
-            y_train=y[train_index,:]
-            y_class_train=y[train_index]
+            y_train=y[train_index]
 
             X_valid=X[valid_index,:]
-            y_valid=y[valid_index,:]
-            y_class_valid=y[valid_index]
+            y_valid=y[valid_index]
             
             model = sequence_attention_model(self.opt) # modelo con sus capas, pesos, funciones de activación...
             
             # entrenar el modelo y obtener métricas
             history = model.fit(X_train, y_train, validation_data=(X_valid, y_valid), batch_size=self.opt.batch_size, epochs=self.opt.epochs, verbose=self.opt.verbose, shuffle=True)
-            pred = model.predict_classes(X_valid)
-            #eval_loss, eval_p_macro, eval_p_micro, eval_r_macro, eval_r_micro, eval_f1_macro, eval_f1_micro, eval_accuracy, eval_roc = self.model.evaluate(X_valid, y_valid, batch_size=self.opt.batch_size, verbose=self.opt.verbose)
+            y_pred = model.predict(X_valid)
+            pred = (y_pred > 0.5).astype('int32') # pred = 0 se y_pred <= 0.5    pred = 1 en caso contrario
 
-            f1_micro.append(f1_score(y_class_valid, pred, average='micro'))
-            f1_macro.append(f1_score(y_class_valid, pred, average='macro'))
-            p_micro.append(precision_score(y_class_valid, pred, average='micro'))
-            p_macro.append(precision_score(y_class_valid, pred, average='macro'))
-            r_micro.append(recall_score(y_class_valid, pred, average='micro'))
-            r_macro.append(recall_score(y_class_valid, pred, average='macro'))
-            accuracy.append(accuracy_score(y_class_valid, pred))
-            roc_auc.append(roc_auc_score(y_class_valid, pred))
+            f1_micro.append(f1_score(y_valid, pred, average='micro'))
+            f1_macro.append(f1_score(y_valid, pred, average='macro'))
+            p_micro.append(precision_score(y_valid, pred, average='micro'))
+            p_macro.append(precision_score(y_valid, pred, average='macro'))
+            r_micro.append(recall_score(y_valid, pred, average='micro'))
+            r_macro.append(recall_score(y_valid, pred, average='macro'))
+            accuracy.append(accuracy_score(y_valid, pred))
+            roc_auc.append(roc_auc_score(y_valid, pred))
+            
+            actual_classes = np.append(actual_classes, y_valid)
+            predicted_classes = np.append(predicted_classes, pred)
+
 
         # guardar las métricas obtenidas
         # mean values
@@ -93,8 +99,12 @@ class SeqAttModel:
         loss_values = history_dict['loss']
         val_loss_values = history_dict['val_loss']
 
-        pickle.dump([p_micro, r_micro, f1_micro, p_macro, r_macro, f1_macro, accuracy, roc_auc, (loss_values, val_loss_values)], 
-                    open('{}/results_cnn.pkl'.format(self.opt.out_dir), 'wb'))
+        labels_num = list(set(y)) # 0 = CD, 1 = Not-CD
+        labels_alphanum = list(label_dict.keys())
+        conf=confusion_matrix(actual_classes, predicted_classes, labels=labels_num)
+
+        pickle.dump([labels_alphanum, conf, p_micro, r_micro, f1_micro, p_macro, r_macro, f1_macro, accuracy, roc_auc, (loss_values, val_loss_values)], 
+                    open('{}/all_results.pkl'.format(self.opt.out_dir), 'wb'))
 
         # guardar los datos más importantes en un formato más leíble
         attributes=['mean_f1_macro: ' + str(f1mac),        'mean_f1_micro: ' + str(f1mic), 
@@ -115,8 +125,8 @@ class SeqAttModel:
         '''
         logging.info('Training started: train the model on {} sequences'.format(X.shape[0]))
         self.history = self.model.fit(X, y, batch_size=self.opt.batch_size, epochs=self.opt.epochs, verbose=self.opt.verbose)
-        #train_loss, train_acc = self.model.evaluate(X, y, batch_size=self.opt.batch_size, verbose=self.opt.verbose)
-        #logging.info('Training completed: training accuracy is {:.4f}.'.format(train_acc))
+        train_loss, train_acc = self.model.evaluate(X, y, batch_size=self.opt.batch_size, verbose=self.opt.verbose)
+        logging.info('Training completed: training accuracy is {:.4f}.'.format(train_acc))
     
     def train_generator(self, training_generator, n_workers):
         '''

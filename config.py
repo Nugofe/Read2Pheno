@@ -6,12 +6,12 @@ class Config:
     ## ======= parameters required ======= ##
     in_dir = '../crohns_disease/samples_fna' # directory of raw data
     out_dir = '../crohns_disease/results/CNNclassifier' # directory of processed data
-    meta_data_file = '../crohns_disease/samples_fna/meta_data-PRUEBA.csv' # meta data file  ----------  PRUEBA
+    meta_data_file = '../crohns_disease/samples_fna/meta_data.csv' # meta data file  ----------  PRUEBA
 
     # For the Gevers data set, 20, 80 and 200 samples per class are randomly selected 
     # as training data (resulting in 40, 160 and 400 samples total respectively).
-    num_train_samples_per_cls = 2 #10 # number of training sample per class  ----------  PRUEBA
-    num_train_reads_per_sample = 100 # number of training reads per sample  ----------  PRUEBA
+    num_train_samples_per_cls = 20 # number of training sample per class  ----------  PRUEBA
+    num_train_reads_per_sample = 500 # number of training reads per sample  ----------  PRUEBA
 
     SEQLEN = 100 # sequence length   https://datascience.stackexchange.com/questions/64022/why-must-a-cnn-have-a-fixed-input-size
     BASENUM = 4 # dimension of input sequence (e.g., there are 4 major bases for DNA sequence input, therefore BASENUM is 4)
@@ -46,8 +46,8 @@ class Config:
     #opt_lr = 0.005 # learning rate
     opt_decay = 0 # learning rate decay
 
-    batch_size = 6 #1024 # number of sequences used to train a batch  ----------  PRUEBA
-    epochs = 1 #10  ----------  PRUEBA
+    batch_size = 1024 #6 # number of sequences used to train a batch  ----------  PRUEBA
+    epochs = 10 #1  # ----------  PRUEBA
     #epochs = 1 # number of epochs to train
     n_folds = 10 # folds for cross validation
     shuffle = True

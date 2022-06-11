@@ -68,6 +68,7 @@ def split_sample(sample_id, label, in_dir, out_dir):
     f_sample.close()
     return meta_data_read_list
 
+# ESTE YA NO
 def train_test_split(meta_data, train_size_per_class):
     '''
     train test split
@@ -88,12 +89,11 @@ def train_test_split(meta_data, train_size_per_class):
     
     return partition
 
-def select_data(meta_data, number_samples_per_class):
-    #ej: ['CD', 'Not-CD']
-    label_list = sorted(meta_data['label'].unique())
-
-    #ej: {'CD': ['ERR1368879', ...], 'Not-CD': ['ERR1368881', ...]}
-    sample_by_class = {label: meta_data[meta_data['label']==label]['sample_id'].tolist() for label in label_list}
+# NUEVA
+def select_num_samples(meta_data, number_samples_per_class):
+    
+    label_list = sorted(meta_data['label'].unique()) #ej: ['CD', 'Not-CD']
+    sample_by_class = {label: meta_data[meta_data['label']==label]['sample_id'].tolist() for label in label_list} #ej: {'CD': ['ERR1368879', ...], 'Not-CD': ['ERR1368881', ...]}
     
     data = []
     
@@ -162,6 +162,7 @@ def preprocess_data(opt):
     read_partition = {'train': train_list, 'test': test_list}
     pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))    
     
+# SE DIVIDIÓ LA FUNCIONALIDAD ORIGINAL (ahora dos funciones: preprocess_data_pickle + select_data)
 def preprocess_data_pickle(opt):
     '''
     preprocessing the data
@@ -207,56 +208,54 @@ def preprocess_data_pickle(opt):
 
     pickle.dump([sample_to_label, read_meta_data], open('{}/meta_data.pkl'.format(opt.out_dir), 'wb'))
 
-    # escoger el número de muestras de cada
-    # escoger el número establecido en la configuración, o si este es muy pequeño, el número de muestras de la clase con menos muestras
+# NUEVA
+def select_data_pickle(opt):
+    meta_data = pd.read_csv(opt.meta_data_file, dtype='str')
+    label_list = sorted(meta_data['label'].unique()) #ej: ['CD', 'Not-CD']
+
+    #label_dict = pickle.load(open('{}/label_dict.pkl'.format(opt.out_dir), 'rb')) 
+    sample_to_label, read_meta_data = pickle.load(open('{}/meta_data.pkl'.format(opt.out_dir), 'rb'))
+
+    # escoger el número de MUESTRAS de cada tipo
+    #       escoger el número establecido en la configuración, o si este es muy pequeño, 
+    #       el número de muestras de la clase con menos muestras
     min_num_sample = min([meta_data[meta_data['label']==label].shape[0] for label in label_list])
     num_train_samples_per_cls = opt.num_train_samples_per_cls
     num_train_samples_per_cls = num_train_samples_per_cls if num_train_samples_per_cls < min_num_sample else min_num_sample
     
-    # ------------------------------------------------------------------------------------------------------------------------------
-
-    # crear un diccionario con el grupo de train y el de test
-    #partition = train_test_split(meta_data, num_train_samples_per_cls)
-    #
-    ## crear un .pickle con los datos de train y test y guardarlo en el out_dir
-    #train_list = []
-    #for sample_id in partition['train']:
-    #    train_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
-    #test_list = []
-    #for sample_id in partition['test']:
-    #    test_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
-    #
-    #read_partition = {'train': train_list, 'test': test_list}
-    #pickle.dump(read_partition, open('{}/train_test_split.pkl'.format(opt.out_dir), 'wb'))
-
-    # --------------------------------------------------------------------
-
-    data = select_data(meta_data, num_train_samples_per_cls)
+    #data = select_num_samples(meta_data, num_train_samples_per_cls)
+    sample_by_class = {label: meta_data[meta_data['label']==label]['sample_id'].tolist() for label in label_list} #ej: {'CD': ['ERR1368879', ...], 'Not-CD': ['ERR1368881', ...]}
+    
+    data = []
+    for cls in sample_by_class: # cls = CD, Not-CD
+        tmp_list = random.sample(sample_by_class[cls], num_train_samples_per_cls)
+        data.extend(tmp_list)
     
     read_list = []          # todas las secuencias
     read_list_selected = [] # solo las secuencias seleccionadas
     for sample_id in data:
         read_list.extend([('{}/{}/{}.pkl'.format(opt.out_dir, sample_to_label[sample_id], sample_id), read_id) for read_id in read_meta_data[sample_id]])
 
-    pickle.dump(read_list, open('{}/sequence_list.pkl'.format(opt.out_dir), 'wb'))
-    
-    for sample in read_meta_data:
-        tmp_list = random.sample(read_meta_data[sample], opt.num_train_reads_per_sample)
+    pickle.dump(read_list, open('{}/sequence_list.pkl'.format(opt.out_dir), 'wb')) # fichero con todas las secuencias de las muestras escogidas
+    print("sequence_list   done")
+
+    # escoger el número de SECUENCIAS de cada muestra    
+    for sample_id in read_meta_data:
+        num_reads = min(opt.num_train_reads_per_sample, len(read_meta_data[sample_id]))
+        tmp_list = random.sample(read_meta_data[sample_id], num_reads)
         filter_set = set(tmp_list)
         read_list_selected.extend([tuple for tuple in read_list if tuple[1] in filter_set])
     
-    pickle.dump(read_list_selected, open('{}/sequence_list_selected.pkl'.format(opt.out_dir), 'wb'))
-
+    pickle.dump(read_list_selected, open('{}/sequence_list_selected.pkl'.format(opt.out_dir), 'wb')) # fichero solo con las secuencias escogidas
+    print("sequence_list_selected   done")
 
  ################ LAS MÍAS ################
 
-@staticmethod
 def save_text_array(file, elements): # file =  path + file_name
     with open(file, mode='wt', encoding='utf-8') as myfile:
         for e in elements:
             myfile.write(e)
             myfile.write('\n')
 
-@staticmethod
 def save_numpy_array(file, array):
     np.savetxt(file, array, delimiter=",")
