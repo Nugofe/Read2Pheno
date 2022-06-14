@@ -8,6 +8,7 @@ from .utils import save_text_array
 from keras import backend as K
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score, confusion_matrix
+from datetime import datetime as dt
 
 
 logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
@@ -30,7 +31,7 @@ class SeqAttModel:
         logging.info('Model initialized.')
 
     # MI CROSS VALIDATION
-    def tune_and_eval(self, X, y, label_dict): # cross validation
+    def tune_and_eval(self, X, y, labels): # cross validation
         skf = StratifiedKFold(n_splits=self.opt.n_folds, shuffle=True) # CV con k = 10
 
         p_micro=[] # cada elemento es la métrica calculada en un fold
@@ -44,6 +45,8 @@ class SeqAttModel:
 
         actual_classes = np.empty([0], dtype=int)
         predicted_classes = np.empty([0], dtype=int)
+
+        start_time = dt.now()
 
         for train_index, valid_index in skf.split(X, y): # Generate indices to split data into training and validation set
             print ('\n Evaluation on a new fold is now get started ..')
@@ -92,6 +95,9 @@ class SeqAttModel:
         sremic=np.std(r_micro)
         saccur=np.std(accuracy)
         srocauc=np.std(roc_auc)
+        
+        end_time = dt.now() - start_time
+
         # table
         #latex_line=' & '.join([str(np.round(x,2))+' $\\pm$ '+str(np.round(y,2)) for x,y in [ [prmic, sprmic], [remic, sremic], [f1mic, sf1mic], [prmac, sprmac], [remac, sremac], [f1mac, sf1mac], [maccur, saccur], [mrocauc, srocauc] ]])      
         
@@ -99,15 +105,18 @@ class SeqAttModel:
         loss_values = history_dict['loss']
         val_loss_values = history_dict['val_loss']
 
-        labels_num = list(set(y)) # 0 = CD, 1 = Not-CD
-        labels_alphanum = list(label_dict.keys())
+        labels_num = list(set(y)) # 1 = CD, 0 = Not-CD
+
+        print('labels_num  !!!!!!!!!!' + str( labels_num ))
+        print('labels      !!!!!!!!!!' + str( labels ))
         conf=confusion_matrix(actual_classes, predicted_classes, labels=labels_num)
 
-        pickle.dump([labels_alphanum, conf, p_micro, r_micro, f1_micro, p_macro, r_macro, f1_macro, accuracy, roc_auc, (loss_values, val_loss_values)], 
+        pickle.dump([labels, conf, p_micro, r_micro, f1_micro, p_macro, r_macro, f1_macro, accuracy, roc_auc, (loss_values, val_loss_values)], 
                     open('{}/all_results.pkl'.format(self.opt.out_dir), 'wb'))
 
         # guardar los datos más importantes en un formato más leíble
-        attributes=['mean_f1_macro: ' + str(f1mac),        'mean_f1_micro: ' + str(f1mic), 
+        attributes=['cross_val_time: ' + str(end_time),
+                    'mean_f1_macro: ' + str(f1mac),        'mean_f1_micro: ' + str(f1mic), 
                     'mean_precision_macro: ' + str(prmac), 'mean_precision_micro: ' + str(prmic),
                     'mean_recall_macro: ' + str(remac),    'mean_recall_micro: ' + str(remic),
                     'mean_accuracy: ' + str(maccur),       'mean_roc_auc: ' + str(mrocauc),

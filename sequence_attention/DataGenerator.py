@@ -107,12 +107,13 @@ class DataGeneratorPickle(keras.utils.Sequence):
         '''Denotes the number of batches per epoch'''
         return int(np.floor(len(self.list_IDs) / self.batch_size))
 
-    # get all data (ESTA LA HICE YO PARA PROBAR COSAS)
+    # get all data (NUEVA PARA USAR EL CV)
     def getalldata(self):
         '''Generate all batches of data'''
 
         # Find list of IDs
         list_IDs_temp = [self.list_IDs[k] for k in self.indexes]
+        #print('list_IDs_temp !!!!!! ' + str(list_IDs_temp))
 
         # Generate data containing batch_size samples
         X, y = self.__data_generation(list_IDs_temp)
